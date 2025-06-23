@@ -1,0 +1,61 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+opa-wasm-env/
+venv/
+env/
+.env
+.venv/
+
+# Distribution / packaging
+dist/
+build/
+*.egg
+*.egg-info/
+.Python
+downloads/
+eggs/
+lib/
+lib64/
+
+# Development tools
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+*.wasm
+bundle/
+bundle.tar.gz
+data.json
+
+# Logs and databases
+*.log
+*.sqlite3
+*.db
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Documentation 
+docs/_build/
+site/
+
+# Environment variables
+.env
+.env.local
+
+# WASM specific
+*.wasm
+*.wat

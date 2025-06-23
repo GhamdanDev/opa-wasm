@@ -1,0 +1,5 @@
+fastapi==0.115.13
+uvicorn==0.34.3
+wasmtime==0.27.0
+pydantic==2.11.7
+# Add other dependencies as needed
