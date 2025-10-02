@@ -25,9 +25,8 @@ jobs:
       - name: Run TODO Scanner
         uses: ribtoks/tdg-github-action@master
         with:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
           REF: ${{ github.ref }}
-          INCLUDE_PATTERN: "**/*.py"
+          INCLUDE_PATTERN: ".*[.]py$"
           LABEL: "technical-debt,automated"
