@@ -1,0 +1,57 @@
+name: "Auto TODO/FIXME to GitHub Issue"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  todo-to-issue:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # لإجراء commit تلقائي على التعليقات
+      issues: write          # لإنشاء وتحديث Issues
+      pull-requests: write   # إذا أردت ربط Issues بالـPR
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run TODO to Issue Action
+        uses: alstr/todo-to-issue-action@v5
+        with:
+          # نحدد أنواع التعليقات اللي نريد التعامل معها
+          IDENTIFIERS: '[{"name": "TODO", "labels": ["enhancement"]}, {"name": "FIXME", "labels": ["bug"]}]'
+          
+          # تفعيل إدراج رابط الـIssue داخل التعليق تلقائيًا
+          INSERT_ISSUE_URLS: "true"
+          
+          # إغلاق الـIssue تلقائي عند إزالة التعليق
+          CLOSE_ISSUES: "true"
+          
+          # يمكن تخصيص قالب الـIssue (اختياري)
+          ISSUE_TEMPLATE: |
+            {{ title }}
+            
+            **Found in code snippet:**
+            ```{{ snippet }} ```
+            
+            [Go to the line in code]({{ url }})
+            
+            Please assign and triage.
+
+      - name: Set GitHub Actions Bot user
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit updated comments with Issue links
+        run: |
+          git add -A
+          if [[ `git status --porcelain` ]]; then
+            git commit -m "Automatically added GitHub issue links to TODO/FIXME comments"
+            git push origin main
+          else
+            echo "No changes to commit"
