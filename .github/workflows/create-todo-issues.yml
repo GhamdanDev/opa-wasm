@@ -5,7 +5,20 @@ on:
     branches:
       - main
       - master
+    paths:
+      - '**.py'
+      - '**.js'
+      - '**.ts'
+      - '**.go'
+      - '**.java'
+      - '**.yml'
+      - '**.yaml'
+  pull_request:
+    types: [opened, synchronize]
   workflow_dispatch:
+  schedule:
+    # Run every Monday at 9 AM UTC to catch any missed TODOs
+    - cron: '0 9 * * 1'
 
 jobs:
   create-todo-issues:
@@ -13,13 +26,136 @@ jobs:
     permissions:
       contents: read
       issues: write
+      pull-requests: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better context
 
       - name: Create issues from TODO comments
-        uses: alstr/todo-to-issue-action@v4
+        uses: alstr/todo-to-issue-action@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          # === Core Configuration ===
+          # Assign issues to the person who added the TODO
           AUTO_ASSIGN: true
+          
+          # Auto-close issues when TODO is removed from code
           CLOSE_ISSUES: true
+          
+          # Insert GitHub issue URLs back into TODO comments for better tracking
+          INSERT_ISSUE_URLS: false
+          
+          # === TODO Identifiers with Custom Labels ===
+          # This is the expert way - each identifier gets its own labels and formatting
+          IDENTIFIERS: |
+            [
+              {
+                "name": "TODO", 
+                "labels": ["type:enhancement", "priority:medium", "todo"]
+              },
+              {
+                "name": "FIXME",
+                "labels": ["type:bug", "priority:high", "needs-fix", "todo"]
+              },
+              {
+                "name": "HACK",
+                "labels": ["type:technical-debt", "priority:medium", "refactor", "todo"]
+              },
+              {
+                "name": "XXX",
+                "labels": ["type:attention-needed", "priority:high", "todo"]
+              },
+              {
+                "name": "BUG",
+                "labels": ["type:bug", "priority:critical", "todo"]
+              },
+              {
+                "name": "NOTE",
+                "labels": ["type:documentation", "priority:low", "todo"]
+              }
+            ]
+          
+          # === Custom Issue Template ===
+          # Professional issue format with all important information
+          ISSUE_TEMPLATE: |
+            ## � Summary
+            
+            {{ body }}
+            
+            ## � Location
+            **File:** `{{ url }}`
+            
+            ## 💻 Code Context
+            {{ snippet }}
+            
+            ## ✅ Acceptance Criteria
+            - [ ] Review and understand the TODO comment
+            - [ ] Implement the required changes
+            - [ ] Add or update tests as needed
+            - [ ] Update documentation if applicable
+            - [ ] Remove the TODO comment after completion
+            
+            ---
+            *🤖 This issue was automatically created from a code comment.*
+            *It will be automatically closed when the comment is removed.*
+          
+          # === Advanced Formatting ===
+          AUTO_P: true   # Format multiline TODOs as paragraphs
+          ESCAPE: true   # Escape special Markdown characters
+          
+          # === Ignore Patterns ===
+          # Regex patterns for files/folders to skip
+          IGNORE: "node_modules/**,dist/**,build/**,__pycache__/**,.git/**,opa-wasm-env/**,*.min.js,*.min.css,bundle.tar.gz"
+      
+      - name: Generate Summary Report
+        if: always()
+        run: |
+          echo "## 📊 TODO to Issue Automation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Workflow Status:** Completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔧 Active Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Feature | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Auto-assign to author | ✅ Enabled |" >> $GITHUB_STEP_SUMMARY
+          echo "| Auto-close resolved TODOs | ✅ Enabled |" >> $GITHUB_STEP_SUMMARY
+          echo "| Label by priority | ✅ Enabled |" >> $GITHUB_STEP_SUMMARY
+          echo "| Label by type | ✅ Enabled |" >> $GITHUB_STEP_SUMMARY
+          echo "| Emoji prefixes | ✅ Enabled |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🏷️ Supported TODO Types" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Type | Priority | Labels | Example |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 📝 TODO | Medium | enhancement, todo | \`# TODO: Add feature\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔥 FIXME | High | bug, needs-fix, todo | \`# FIXME: Fix race condition\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⚠️ HACK | Medium | technical-debt, refactor, todo | \`# HACK: Temporary solution\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| ❗ XXX | High | attention-needed, todo | \`# XXX: Review this carefully\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🐛 BUG | Critical | bug, todo | \`# BUG: Memory leak here\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📄 NOTE | Low | documentation, todo | \`# NOTE: Algorithm optimized\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📂 Excluded Paths" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- \`node_modules/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`dist/\`, \`build/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`__pycache__/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`.git/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`opa-wasm-env/\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`*.min.js\`, \`*.min.css\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📖 Resources" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- 📚 [Complete Guide](.github/TODO_WORKFLOW_GUIDE.md)" >> $GITHUB_STEP_SUMMARY
+          echo "- 🚀 [Quick Start](.github/TODO_QUICK_START.md)" >> $GITHUB_STEP_SUMMARY
+          echo "- 💡 [Best Practices](examples/todo_best_practices.py)" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔍 [View Open TODOs](../../issues?q=is:issue+is:open+label:todo)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "*💡 Tip: Write clear TODO comments with context for better issue quality!*" >> $GITHUB_STEP_SUMMARY
+
