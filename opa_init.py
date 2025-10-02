@@ -12,7 +12,6 @@ def initialize_opa(wasm_path):
         logger.info("✅ WASM module loaded successfully")
         
         # Define host functions needed by OPA
-        # TODO: Implement the actual logic for the host functions
         def opa_println(addr, len):
             # Print function implementation
             return 0
