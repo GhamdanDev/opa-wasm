@@ -6,19 +6,19 @@ on:
       - main
       - master
     paths:
-      - '**.py'
-      - '**.js'
-      - '**.ts'
-      - '**.go'
-      - '**.java'
-      - '**.yml'
-      - '**.yaml'
+      - "**.py"
+      - "**.js"
+      - "**.ts"
+      - "**.go"
+      - "**.java"
+      - "**.yml"
+      - "**.yaml"
   pull_request:
     types: [opened, synchronize]
   workflow_dispatch:
   schedule:
     # Run every Monday at 9 AM UTC to catch any missed TODOs
-    - cron: '0 9 * * 1'
+    - cron: "0 9 * * 1"
 
 jobs:
   create-todo-issues:
@@ -32,7 +32,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for better context
+          fetch-depth: 0 # Full history for better context
 
       - name: Create issues from TODO comments
         uses: alstr/todo-to-issue-action@v5
@@ -42,13 +42,13 @@ jobs:
           # === Core Configuration ===
           # Assign issues to the person who added the TODO
           AUTO_ASSIGN: true
-          
+
           # Auto-close issues when TODO is removed from code
           CLOSE_ISSUES: true
-          
+
           # Insert GitHub issue URLs back into TODO comments for better tracking
           INSERT_ISSUE_URLS: false
-          
+
           # === TODO Identifiers with Custom Labels ===
           # This is the expert way - each identifier gets its own labels and formatting
           IDENTIFIERS: |
@@ -78,39 +78,39 @@ jobs:
                 "labels": ["type:documentation", "priority:low", "todo"]
               }
             ]
-          
+
           # === Custom Issue Template ===
           # Professional issue format with all important information
           ISSUE_TEMPLATE: |
             ## � Summary
-            
+
             {{ body }}
-            
+
             ## � Location
             **File:** `{{ url }}`
-            
+
             ## 💻 Code Context
             {{ snippet }}
-            
+
             ## ✅ Acceptance Criteria
             - [ ] Review and understand the TODO comment
             - [ ] Implement the required changes
             - [ ] Add or update tests as needed
             - [ ] Update documentation if applicable
             - [ ] Remove the TODO comment after completion
-            
+
             ---
             *🤖 This issue was automatically created from a code comment.*
             *It will be automatically closed when the comment is removed.*
-          
+
           # === Advanced Formatting ===
-          AUTO_P: true   # Format multiline TODOs as paragraphs
-          ESCAPE: true   # Escape special Markdown characters
-          
+          AUTO_P: true # Format multiline TODOs as paragraphs
+          ESCAPE: true # Escape special Markdown characters
+
           # === Ignore Patterns ===
-          # Regex patterns for files/folders to skip
-          IGNORE: "node_modules/**,dist/**,build/**,__pycache__/**,.git/**,opa-wasm-env/**,*.min.js,*.min.css,bundle.tar.gz"
-      
+          # Regex patterns for files/folders to skip (Python regex, not glob)
+          IGNORE: "node_modules/.*,dist/.*,build/.*,__pycache__/.*,.git/.*,opa-wasm-env/.*,.*\\.min\\.js,.*\\.min\\.css,bundle\\.tar\\.gz"
+
       - name: Generate Summary Report
         if: always()
         run: |
@@ -158,4 +158,3 @@ jobs:
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "*💡 Tip: Write clear TODO comments with context for better issue quality!*" >> $GITHUB_STEP_SUMMARY
-
