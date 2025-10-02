@@ -1,0 +1,114 @@
+name: "Setup Labels for TODO Action"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - '.github/workflows/setup-labels.yml'
+
+jobs:
+  setup-labels:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create or update labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [
+              // Base labels
+              { name: 'todo', color: '0075ca', description: 'Automated TODO item from code' },
+              { name: 'automated', color: '7057ff', description: 'Created by automation' },
+              
+              // Type labels
+              { name: 'type:enhancement', color: 'a2eeef', description: 'New feature or request' },
+              { name: 'type:bug', color: 'd73a4a', description: 'Something is not working' },
+              { name: 'type:technical-debt', color: 'fbca04', description: 'Code that needs refactoring' },
+              { name: 'type:attention-needed', color: 'ff6b6b', description: 'Requires immediate attention' },
+              { name: 'type:documentation', color: '0075ca', description: 'Improvements or additions to documentation' },
+              
+              // Priority labels
+              { name: 'priority:critical', color: 'b60205', description: 'Critical priority - needs immediate action' },
+              { name: 'priority:high', color: 'd93f0b', description: 'High priority' },
+              { name: 'priority:medium', color: 'fbca04', description: 'Medium priority' },
+              { name: 'priority:low', color: 'c5def5', description: 'Low priority' },
+              
+              // Action labels
+              { name: 'needs-fix', color: 'd73a4a', description: 'Needs to be fixed' },
+              { name: 'refactor', color: 'fbca04', description: 'Code refactoring needed' },
+            ];
+
+            for (const label of labels) {
+              try {
+                // Try to get the label
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name
+                });
+                
+                // If it exists, update it
+                await github.rest.issues.updateLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+                
+                console.log(`✅ Updated label: ${label.name}`);
+              } catch (error) {
+                if (error.status === 404) {
+                  // Label doesn't exist, create it
+                  await github.rest.issues.createLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: label.name,
+                    color: label.color,
+                    description: label.description
+                  });
+                  
+                  console.log(`✨ Created label: ${label.name}`);
+                } else {
+                  console.error(`❌ Error with label ${label.name}:`, error);
+                }
+              }
+            }
+            
+            console.log('\n🎉 All labels have been set up successfully!');
+            
+      - name: Summary
+        run: |
+          echo "## 🏷️ Labels Setup Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The following label categories have been configured:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Base Labels" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔵 \`todo\` - Automated TODO item from code" >> $GITHUB_STEP_SUMMARY
+          echo "- 🟣 \`automated\` - Created by automation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Type Labels" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔵 \`type:enhancement\` - New feature or request" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔴 \`type:bug\` - Something is not working" >> $GITHUB_STEP_SUMMARY
+          echo "- 🟡 \`type:technical-debt\` - Code that needs refactoring" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔴 \`type:attention-needed\` - Requires immediate attention" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔵 \`type:documentation\` - Documentation improvements" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Priority Labels" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔴 \`priority:critical\` - Critical priority" >> $GITHUB_STEP_SUMMARY
+          echo "- 🟠 \`priority:high\` - High priority" >> $GITHUB_STEP_SUMMARY
+          echo "- 🟡 \`priority:medium\` - Medium priority" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔵 \`priority:low\` - Low priority" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Action Labels" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔴 \`needs-fix\` - Needs to be fixed" >> $GITHUB_STEP_SUMMARY
+          echo "- 🟡 \`refactor\` - Code refactoring needed" >> $GITHUB_STEP_SUMMARY
