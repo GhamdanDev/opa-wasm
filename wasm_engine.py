@@ -2,10 +2,13 @@ import wasmtime
 from logger import logger
 from config import POLICY_WASM_PATH
 
+# TODO: Implement singleton pattern with thread safety
+# FIXME: Add proper error recovery mechanism
 class WasmEngine:
     def __init__(self):
         self.store = None
         self.instance = None
+        # HACK: Initialize in constructor, should be lazy-loaded
         self.initialize()
     
     def initialize(self):
@@ -18,12 +21,15 @@ class WasmEngine:
             logger.info("✅ WASM module loaded successfully")
             
             # Define the host functions with correct signatures
+            # FIXME: opa_abort should read and log the abort message
             def opa_abort(caller, msg_ptr, msg_len):
                 return None
                 
+            # TODO: Implement proper logging for opa_println
             def opa_println(caller, msg_ptr, msg_len):
                 return 0
             
+            # HACK: opa_builtin3 returns dummy value, needs proper implementation
             def opa_builtin3(caller, builtin_id, ctx, addr):
                 return 0
             

@@ -4,6 +4,7 @@ import logging
 # FIXME: Log level should be configurable via environment variable
 def setup_logger():
     """Configure and return the application logger"""
+    # HACK: Basic logging setup, needs proper formatter and handlers
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
     return logger
