@@ -15,8 +15,7 @@ app.include_router(router)
 @app.on_event("startup")
 async def startup_event():
     logger.info("Starting OPA WASM API application")
-    # TODO: Add health check for external dependencies
-    # Ensure WASM engine is initialized
+
     if wasm_engine.is_initialized():
         logger.info("OPA WASM engine is ready")
     else:
