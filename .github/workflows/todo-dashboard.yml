@@ -1,0 +1,222 @@
+name: "TODO Dashboard Report"
+
+on:
+  schedule:
+    # Run every day at 8 AM UTC
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate TODO Statistics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            
+            // Fetch all open TODO issues
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              labels: 'todo',
+              per_page: 100
+            });
+            
+            console.log(`📊 Found ${issues.length} open TODO issues`);
+            
+            // Statistics
+            const stats = {
+              total: issues.length,
+              byType: {},
+              byPriority: {},
+              byAssignee: {},
+              oldest: null,
+              newest: null,
+              avgAge: 0
+            };
+            
+            let totalAge = 0;
+            
+            issues.forEach(issue => {
+              // By type
+              const typeLabel = issue.labels.find(l => l.name.startsWith('type:'));
+              if (typeLabel) {
+                const type = typeLabel.name.replace('type:', '');
+                stats.byType[type] = (stats.byType[type] || 0) + 1;
+              }
+              
+              // By priority
+              const priorityLabel = issue.labels.find(l => l.name.startsWith('priority:'));
+              if (priorityLabel) {
+                const priority = priorityLabel.name.replace('priority:', '');
+                stats.byPriority[priority] = (stats.byPriority[priority] || 0) + 1;
+              }
+              
+              // By assignee
+              if (issue.assignee) {
+                const assignee = issue.assignee.login;
+                stats.byAssignee[assignee] = (stats.byAssignee[assignee] || 0) + 1;
+              }
+              
+              // Age calculation
+              const age = Date.now() - new Date(issue.created_at).getTime();
+              totalAge += age;
+              
+              if (!stats.oldest || age > (Date.now() - new Date(stats.oldest.created_at).getTime())) {
+                stats.oldest = issue;
+              }
+              if (!stats.newest || age < (Date.now() - new Date(stats.newest.created_at).getTime())) {
+                stats.newest = issue;
+              }
+            });
+            
+            stats.avgAge = issues.length > 0 ? totalAge / issues.length : 0;
+            const avgDays = Math.floor(stats.avgAge / (1000 * 60 * 60 * 24));
+            
+            // Generate report
+            let report = '# 📊 TODO Dashboard Report\n\n';
+            report += `**Generated:** ${new Date().toLocaleString('en-US', { timeZone: 'UTC' })} UTC\n\n`;
+            report += '---\n\n';
+            
+            // Overall stats
+            report += '## 📈 Overall Statistics\n\n';
+            report += `- **Total Open TODOs:** ${stats.total}\n`;
+            report += `- **Average Age:** ${avgDays} days\n`;
+            report += `- **Oldest TODO:** ${stats.oldest ? `#${stats.oldest.number} (${Math.floor((Date.now() - new Date(stats.oldest.created_at).getTime()) / (1000 * 60 * 60 * 24))} days)` : 'N/A'}\n`;
+            report += `- **Newest TODO:** ${stats.newest ? `#${stats.newest.number}` : 'N/A'}\n\n`;
+            
+            // By priority
+            report += '## 🎯 By Priority\n\n';
+            report += '| Priority | Count | Percentage |\n';
+            report += '|----------|-------|------------|\n';
+            ['critical', 'high', 'medium', 'low'].forEach(priority => {
+              const count = stats.byPriority[priority] || 0;
+              const percentage = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
+              const emoji = { critical: '🔴', high: '🟠', medium: '🟡', low: '🔵' }[priority];
+              report += `| ${emoji} ${priority.charAt(0).toUpperCase() + priority.slice(1)} | ${count} | ${percentage}% |\n`;
+            });
+            report += '\n';
+            
+            // By type
+            report += '## 📝 By Type\n\n';
+            report += '| Type | Count | Percentage |\n';
+            report += '|------|-------|------------|\n';
+            Object.entries(stats.byType).sort((a, b) => b[1] - a[1]).forEach(([type, count]) => {
+              const percentage = Math.round((count / stats.total) * 100);
+              const emoji = {
+                bug: '🐛',
+                enhancement: '✨',
+                'technical-debt': '⚠️',
+                'attention-needed': '❗',
+                documentation: '📄'
+              }[type] || '📌';
+              report += `| ${emoji} ${type} | ${count} | ${percentage}% |\n`;
+            });
+            report += '\n';
+            
+            // By assignee
+            if (Object.keys(stats.byAssignee).length > 0) {
+              report += '## 👥 By Assignee\n\n';
+              report += '| Assignee | Count |\n';
+              report += '|----------|-------|\n';
+              Object.entries(stats.byAssignee)
+                .sort((a, b) => b[1] - a[1])
+                .forEach(([assignee, count]) => {
+                  report += `| @${assignee} | ${count} |\n`;
+                });
+              report += '\n';
+            }
+            
+            // Critical issues
+            const criticalIssues = issues.filter(i => 
+              i.labels.some(l => l.name === 'priority:critical')
+            );
+            
+            if (criticalIssues.length > 0) {
+              report += '## 🚨 Critical TODOs (Immediate Action Required)\n\n';
+              criticalIssues.slice(0, 10).forEach(issue => {
+                const age = Math.floor((Date.now() - new Date(issue.created_at).getTime()) / (1000 * 60 * 60 * 24));
+                report += `- [#${issue.number}](${issue.html_url}) - ${issue.title} _(${age} days old)_\n`;
+              });
+              report += '\n';
+            }
+            
+            // High priority issues
+            const highIssues = issues.filter(i => 
+              i.labels.some(l => l.name === 'priority:high')
+            );
+            
+            if (highIssues.length > 0) {
+              report += '## ⚠️ High Priority TODOs\n\n';
+              highIssues.slice(0, 10).forEach(issue => {
+                const age = Math.floor((Date.now() - new Date(issue.created_at).getTime()) / (1000 * 60 * 60 * 24));
+                report += `- [#${issue.number}](${issue.html_url}) - ${issue.title} _(${age} days old)_\n`;
+              });
+              report += '\n';
+            }
+            
+            // Oldest issues
+            const oldestIssues = [...issues].sort((a, b) => 
+              new Date(a.created_at) - new Date(b.created_at)
+            ).slice(0, 10);
+            
+            if (oldestIssues.length > 0) {
+              report += '## ⏰ Oldest TODOs (Need Attention)\n\n';
+              oldestIssues.forEach(issue => {
+                const age = Math.floor((Date.now() - new Date(issue.created_at).getTime()) / (1000 * 60 * 60 * 24));
+                report += `- [#${issue.number}](${issue.html_url}) - ${issue.title} _(${age} days old)_\n`;
+              });
+              report += '\n';
+            }
+            
+            // Recommendations
+            report += '## 💡 Recommendations\n\n';
+            if (stats.total === 0) {
+              report += '🎉 **Excellent!** No open TODOs. Keep up the great work!\n\n';
+            } else {
+              if (criticalIssues.length > 0) {
+                report += `⚠️ **Action Required:** You have ${criticalIssues.length} critical TODOs that need immediate attention.\n\n`;
+              }
+              if (avgDays > 30) {
+                report += `📅 **Consider:** Average TODO age is ${avgDays} days. Consider addressing older items.\n\n`;
+              }
+              if (stats.total > 50) {
+                report += `📊 **High Volume:** You have ${stats.total} open TODOs. Consider prioritizing and closing resolved items.\n\n`;
+              }
+            }
+            
+            report += '---\n\n';
+            report += '*This report is generated automatically daily.*\n';
+            
+            // Save to file
+            const fs = require('fs');
+            const path = '.github/TODO_DASHBOARD.md';
+            fs.writeFileSync(path, report);
+            
+            console.log('✅ Dashboard report generated successfully!');
+            
+            // Also output to step summary
+            core.summary.addRaw(report).write();
+            
+      - name: Commit Dashboard
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .github/TODO_DASHBOARD.md || true
+          git diff --staged --quiet || git commit -m "📊 Update TODO Dashboard [skip ci]"
+          git push || true
