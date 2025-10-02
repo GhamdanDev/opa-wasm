@@ -11,6 +11,8 @@ async def root():
 @router.get("/resource")
 async def get_resource(request: Request):
     """Protected resource endpoint"""
+    # HACK: Hardcoded user role for testing
+    # TODO: Extract user from JWT token or session
     user = {"role": "admin"}  # Change to "user" to test deny
     
     opa_input = {
