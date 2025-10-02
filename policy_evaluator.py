@@ -3,6 +3,8 @@ from fastapi import HTTPException
 from logger import logger
 from wasm_engine import wasm_engine
 
+# TODO: Add caching mechanism for policy evaluation results
+# FIXME: Need to handle race conditions in concurrent evaluations
 def opa_eval(input_data):
     """Evaluate OPA policy using the OPA WASM evaluation API"""
     if not wasm_engine.is_initialized():
@@ -133,6 +135,8 @@ def evaluate_with_simple_api(exports, input_data):
 
 def evaluate_simple_policy(input_data):
     """Fallback policy evaluation implementing the Rego rule directly"""
+    # HACK: Hardcoded policy logic, should be loaded from config
+    # TODO: Make this configurable and support multiple policies
     try:
         # Your Rego rule: default allow = false; allow if input.user.role == "admin"
         user_role = input_data.get("user", {}).get("role", "")
@@ -141,4 +145,5 @@ def evaluate_simple_policy(input_data):
         return allowed
     except Exception as e:
         logger.error(f"Error in fallback evaluation: {e}")
+        # FIXME: Should not silently return False on error
         return False

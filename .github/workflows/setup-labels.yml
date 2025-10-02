@@ -7,7 +7,7 @@ on:
       - main
       - master
     paths:
-      - '.github/workflows/setup-labels.yml'
+      - ".github/workflows/setup-labels.yml"
 
 jobs:
   setup-labels:
@@ -83,9 +83,9 @@ jobs:
                 }
               }
             }
-            
+
             console.log('\n🎉 All labels have been set up successfully!');
-            
+
       - name: Summary
         run: |
           echo "## 🏷️ Labels Setup Complete" >> $GITHUB_STEP_SUMMARY

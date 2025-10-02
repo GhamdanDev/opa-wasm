@@ -20,6 +20,7 @@ async def startup_event():
     if wasm_engine.is_initialized():
         logger.info("OPA WASM engine is ready")
     else:
+        # FIXME: Should raise exception or exit if WASM engine fails
         logger.warning("OPA WASM engine failed to initialize")
 
 # Shutdown event

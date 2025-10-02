@@ -2,10 +2,13 @@ from fastapi import APIRouter, Request, HTTPException
 from policy_evaluator import opa_eval
 from wasm_engine import wasm_engine
 
+# TODO: Add rate limiting to all endpoints
+# FIXME: Need proper authentication middleware
 router = APIRouter()
 
 @router.get("/")
 async def root():
+    # TODO: Add API documentation link here
     return {"message": "OPA WASM API"}
 
 @router.get("/resource")
@@ -15,6 +18,7 @@ async def get_resource(request: Request):
     # TODO: Extract user from JWT token or session
     user = {"role": "admin"}  # Change to "user" to test deny
     
+    # FIXME: Need to validate input structure before passing to OPA
     opa_input = {
         "user": user,
         "action": "read",
@@ -39,7 +43,9 @@ async def get_resource(request: Request):
 @router.get("/health")
 async def health_check():
     """Health check endpoint"""
+    # TODO: Add more comprehensive health checks (memory, CPU, dependencies)
     wasm_status = "initialized" if wasm_engine.is_initialized() else "failed"
+    # FIXME: Timestamp should be dynamic, not hardcoded
     return {
         "status": "healthy",
         "wasm_module": wasm_status,
