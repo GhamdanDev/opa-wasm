@@ -3,6 +3,8 @@ from api.routes import router
 from logger import logger
 from wasm_engine import wasm_engine
 
+# TODO: Add API versioning support
+# FIXME: Need to add proper CORS configuration for production
 # Initialize FastAPI app
 app = FastAPI()
 
