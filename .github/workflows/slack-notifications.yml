@@ -120,8 +120,8 @@ jobs:
 
             return stats;
 
-      - name: Send Critical Alert (if any)
-        if: steps.stats.outputs.critical > 0
+      - name: Send Critical Alert
+        if: steps.stats.outputs.critical > 0 && github.event_name == 'workflow_run'
         uses: slackapi/slack-github-action@v1
         with:
           payload: |
@@ -147,7 +147,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Critical Items:*\n${{ steps.stats.outputs.critical_list }}"
+                    "text": "*Critical Items:*\n${{ steps.stats.outputs.critical_items }}"
                   }
                 },
                 {
@@ -176,8 +176,7 @@ jobs:
               ]
             }
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
       - name: Send Daily Summary
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -300,8 +299,7 @@ jobs:
               ]
             }
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
       - name: Send New Issues Notification
         if: steps.stats.outputs.new_today > 0 && github.event_name == 'workflow_run'
@@ -334,8 +332,7 @@ jobs:
               ]
             }
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
       - name: Log Summary
         run: |
