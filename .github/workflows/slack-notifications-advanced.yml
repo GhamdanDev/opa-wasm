@@ -51,19 +51,14 @@ jobs:
       - name: 🔍 Analyze TODO comments
         id: analyze
         run: |
-          # Create analysis directory
           mkdir -p .github/reports
-
-          # Scan for TODOs with detailed categorization
           echo "📊 Analyzing TODO comments..."
 
-          # Initialize counters
           critical_count=0
           high_count=0
           medium_count=0
           low_count=0
 
-          # Scan files (exclude vendor, node_modules, etc.)
           find . -type f \( -name "*.py" -o -name "*.js" -o -name "*.ts" -o -name "*.go" -o -name "*.java" -o -name "*.rb" \) \
             ! -path "*/node_modules/*" \
             ! -path "*/vendor/*" \
@@ -73,14 +68,12 @@ jobs:
             ! -path "*/dist/*" \
             ! -path "*/build/*" | while read file; do
             
-            # Search for different TODO types
             if grep -n "TODO\|FIXME\|HACK\|XXX\|BUG\|NOTE" "$file" > /dev/null; then
               echo "Found TODOs in: $file" >> .github/reports/todos.txt
               grep -n "TODO\|FIXME\|HACK\|XXX\|BUG\|NOTE" "$file" >> .github/reports/todos.txt
             fi
           done || true
 
-          # Count by priority (based on keyword)
           if [ -f .github/reports/todos.txt ]; then
             critical_count=$(grep -c "FIXME\|BUG" .github/reports/todos.txt || echo "0")
             high_count=$(grep -c "HACK\|XXX" .github/reports/todos.txt || echo "0")
@@ -92,7 +85,6 @@ jobs:
           has_critical="false"
           [ "$critical_count" -gt 0 ] && has_critical="true"
 
-          # Output results
           echo "critical_count=$critical_count" >> $GITHUB_OUTPUT
           echo "high_count=$high_count" >> $GITHUB_OUTPUT
           echo "medium_count=$medium_count" >> $GITHUB_OUTPUT
@@ -100,7 +92,6 @@ jobs:
           echo "total_count=$total_count" >> $GITHUB_OUTPUT
           echo "has_critical=$has_critical" >> $GITHUB_OUTPUT
 
-          # Create JSON summary for Slack
           summary_json=$(cat <<EOF
           {
             "critical": $critical_count,
@@ -278,11 +269,11 @@ jobs:
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "🟡 *Medium:* $(echo '${{ needs.analyze-todos.outputs.summary_json }}' | grep -o '"medium":[0-9]*' | cut -d':' -f2)"
+                      "text": "🟡 *Medium:* $(echo '${{ needs.analyze-todos.outputs.summary_json }}' | grep -o '\"medium\":[0-9]*' | cut -d':' -f2)"
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "🟢 *Low:* $(echo '${{ needs.analyze-todos.outputs.summary_json }}' | grep -o '"low":[0-9]*' | cut -d':' -f2)"
+                      "text": "🟢 *Low:* $(echo '${{ needs.analyze-todos.outputs.summary_json }}' | grep -o '\"low\":[0-9]*' | cut -d':' -f2)"
                     }
                   ]
                 },
@@ -356,16 +347,10 @@ jobs:
       - name: 📈 Calculate Weekly Metrics
         id: metrics
         run: |
-          # Get commits from the last 7 days
           week_ago=$(date -d '7 days ago' +%Y-%m-%d)
-
-          # Count issues created this week
           created_this_week=$(gh issue list --label todo --created ">=$week_ago" --json number | jq 'length')
-
-          # Count issues closed this week
           closed_this_week=$(gh issue list --label todo --state closed --search "closed:>=$week_ago" --json number | jq 'length')
 
-          # Calculate resolution rate
           if [ "$created_this_week" -gt 0 ]; then
             resolution_rate=$((closed_this_week * 100 / created_this_week))
           else
