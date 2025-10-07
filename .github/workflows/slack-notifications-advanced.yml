@@ -375,6 +375,7 @@ jobs:
           echo "created=$created_this_week" >> $GITHUB_OUTPUT
           echo "closed=$closed_this_week" >> $GITHUB_OUTPUT
           echo "resolution_rate=$resolution_rate" >> $GITHUB_OUTPUT
+          echo "net_change=$((created_this_week - closed_this_week))" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -434,7 +435,7 @@ jobs:
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "🎯 *Net Change:*\n${{ steps.metrics.outputs.created - steps.metrics.outputs.closed }} TODOs"
+                      "text": "🎯 *Net Change:*\n${{ steps.metrics.outputs.net_change }} TODOs"
                     }
                   ]
                 },
