@@ -303,6 +303,10 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
+      - name: Get Today's Date
+        id: date
+        run: echo "today=$(date -u +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
       - name: Send New Issues Notification
         if: steps.stats.outputs.new_today > 0 && github.event_name == 'workflow_run'
         uses: slackapi/slack-github-action@v1.27.0
@@ -328,7 +332,7 @@ jobs:
                         "type": "plain_text",
                         "text": "View New Issues"
                       },
-                      "url": "https://github.com/${{ github.repository }}/issues?q=is:issue+is:open+label:todo+created:${{ github.event.repository.updated_at }}"
+                      "url": "https://github.com/${{ github.repository }}/issues?q=is:issue+is:open+label:todo+created:${{ steps.date.outputs.today }}"
                     }
                   ]
                 }
