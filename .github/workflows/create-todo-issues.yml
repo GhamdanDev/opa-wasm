@@ -47,7 +47,7 @@ jobs:
           CLOSE_ISSUES: true
 
           # Insert GitHub issue URLs back into TODO comments for better tracking
-          INSERT_ISSUE_URLS: false
+          INSERT_ISSUE_URLS: true
 
           # === TODO Identifiers with Custom Labels ===
           # This is the expert way - each identifier gets its own labels and formatting
