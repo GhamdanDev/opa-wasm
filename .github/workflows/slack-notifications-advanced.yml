@@ -92,16 +92,8 @@ jobs:
           echo "total_count=$total_count" >> $GITHUB_OUTPUT
           echo "has_critical=$has_critical" >> $GITHUB_OUTPUT
 
-          summary_json=$(cat <<EOF
-          {
-            "critical": $critical_count,
-            "high": $high_count,
-            "medium": $medium_count,
-            "low": $low_count,
-            "total": $total_count
-          }
-          EOF
-          )
+          # Create JSON summary (single line to avoid multiline output issues)
+          summary_json="{\"critical\":$critical_count,\"high\":$high_count,\"medium\":$medium_count,\"low\":$low_count,\"total\":$total_count}"
           echo "summary_json=$summary_json" >> $GITHUB_OUTPUT
 
           echo "✅ Analysis complete:"
