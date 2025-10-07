@@ -122,8 +122,9 @@ jobs:
 
       - name: Send Critical Alert
         if: steps.stats.outputs.critical > 0 && github.event_name == 'workflow_run'
-        uses: slackapi/slack-github-action@v1
+        uses: slackapi/slack-github-action@v1.27.0
         with:
+          channel-id: ${{ secrets.SLACK_CRITICAL_CHANNEL }}
           payload: |
             {
               "text": "🚨 CRITICAL TODOs Alert",
@@ -180,8 +181,9 @@ jobs:
 
       - name: Send Daily Summary
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-        uses: slackapi/slack-github-action@v1
+        uses: slackapi/slack-github-action@v1.27.0
         with:
+          channel-id: ${{ secrets.SLACK_REPORTS_CHANNEL }}
           payload: |
             {
               "text": "📊 Daily TODO Summary",
@@ -303,8 +305,9 @@ jobs:
 
       - name: Send New Issues Notification
         if: steps.stats.outputs.new_today > 0 && github.event_name == 'workflow_run'
-        uses: slackapi/slack-github-action@v1
+        uses: slackapi/slack-github-action@v1.27.0
         with:
+          channel-id: ${{ secrets.SLACK_GENERAL_CHANNEL }}
           payload: |
             {
               "text": "✨ New TODO Issues Created",
