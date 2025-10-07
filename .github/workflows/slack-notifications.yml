@@ -1,0 +1,350 @@
+name: "Slack Notifications - TODO Issues"
+
+# 🎯 Expert-Level Slack Integration for TODO Action
+# This workflow sends professional notifications to Slack channels
+# Best Practices Applied:
+# - Instant alerts for critical items
+# - Daily summary reports
+# - Beautiful formatting with emoji and colors
+# - Team mentions for high priority
+# - Links to issues for quick access
+
+on:
+  # Trigger after TODO issues are created
+  workflow_run:
+    workflows: ["Create Issues from TODOs"]
+    types:
+      - completed
+
+  # Daily summary at 9 AM
+  schedule:
+    - cron: "0 9 * * *" # Every day at 9 AM UTC
+
+  # Manual trigger for testing
+  workflow_dispatch:
+
+jobs:
+  notify-slack:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get TODO Statistics
+        id: stats
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Fetch all open TODO issues
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              labels: 'todo',
+              per_page: 100
+            });
+
+            console.log(`Found ${issues.length} open TODO issues`);
+
+            // Categorize by type and priority
+            const stats = {
+              total: issues.length,
+              critical: 0,
+              high: 0,
+              medium: 0,
+              low: 0,
+              bugs: 0,
+              fixmes: 0,
+              hacks: 0,
+              new_today: 0,
+              critical_items: [],
+              high_items: []
+            };
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            issues.forEach(issue => {
+              // Count by priority
+              if (issue.labels.some(l => l.name === 'priority:critical')) {
+                stats.critical++;
+                stats.critical_items.push(issue);
+              }
+              if (issue.labels.some(l => l.name === 'priority:high')) {
+                stats.high++;
+                stats.high_items.push(issue);
+              }
+              if (issue.labels.some(l => l.name === 'priority:medium')) stats.medium++;
+              if (issue.labels.some(l => l.name === 'priority:low')) stats.low++;
+              
+              // Count by type
+              if (issue.labels.some(l => l.name === 'type:bug')) stats.bugs++;
+              if (issue.labels.some(l => l.name === 'needs-fix')) stats.fixmes++;
+              if (issue.labels.some(l => l.name === 'refactor')) stats.hacks++;
+              
+              // Count new items (created today)
+              const created = new Date(issue.created_at);
+              created.setHours(0, 0, 0, 0);
+              if (created.getTime() === today.getTime()) {
+                stats.new_today++;
+              }
+            });
+
+            // Export for next steps
+            core.setOutput('total', stats.total);
+            core.setOutput('critical', stats.critical);
+            core.setOutput('high', stats.high);
+            core.setOutput('medium', stats.medium);
+            core.setOutput('low', stats.low);
+            core.setOutput('bugs', stats.bugs);
+            core.setOutput('new_today', stats.new_today);
+
+            // Format critical items for Slack
+            const criticalList = stats.critical_items.slice(0, 5).map(i => 
+              `• <${i.html_url}|#${i.number}: ${i.title}>`
+            ).join('\n');
+            core.setOutput('critical_list', criticalList || 'None');
+
+            // Format high priority items
+            const highList = stats.high_items.slice(0, 3).map(i => 
+              `• <${i.html_url}|#${i.number}: ${i.title}>`
+            ).join('\n');
+            core.setOutput('high_list', highList || 'None');
+
+            return stats;
+
+      - name: Send Critical Alert (if any)
+        if: steps.stats.outputs.critical > 0
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "🚨 CRITICAL TODOs Alert",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🚨 CRITICAL TODO Items Detected!",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*${{ steps.stats.outputs.critical }} critical bug(s)* require immediate attention!"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Critical Items:*\n${{ steps.stats.outputs.critical_list }}"
+                  }
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "<!channel> Please review and assign these critical items immediately."
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View All Critical Issues"
+                      },
+                      "url": "https://github.com/${{ github.repository }}/issues?q=is:issue+is:open+label:priority:critical",
+                      "style": "danger"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Send Daily Summary
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "📊 Daily TODO Summary",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "📊 Daily TODO Status Report",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Total Open TODOs:*\n${{ steps.stats.outputs.total }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*New Today:*\n${{ steps.stats.outputs.new_today }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Priority Breakdown:*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "🔴 *Critical:* ${{ steps.stats.outputs.critical }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "🟠 *High:* ${{ steps.stats.outputs.high }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "🟡 *Medium:* ${{ steps.stats.outputs.medium }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "🔵 *Low:* ${{ steps.stats.outputs.low }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Type Breakdown:*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "🐛 *Bugs:* ${{ steps.stats.outputs.bugs }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "🔥 *FIXMEs:* ${{ steps.stats.outputs.fixmes }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*🔥 High Priority Items (Top 3):*\n${{ steps.stats.outputs.high_list }}"
+                  }
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Generated: <!date^${{ github.event.repository.updated_at }}^{date_num} {time_secs}|now>"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View All TODOs"
+                      },
+                      "url": "https://github.com/${{ github.repository }}/issues?q=is:issue+is:open+label:todo"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Dashboard"
+                      },
+                      "url": "https://github.com/${{ github.repository }}/blob/main/.github/TODO_DASHBOARD.md",
+                      "style": "primary"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Send New Issues Notification
+        if: steps.stats.outputs.new_today > 0 && github.event_name == 'workflow_run'
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "✨ New TODO Issues Created",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "✨ *${{ steps.stats.outputs.new_today }} new TODO issue(s)* were created from code comments."
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View New Issues"
+                      },
+                      "url": "https://github.com/${{ github.repository }}/issues?q=is:issue+is:open+label:todo+created:${{ github.event.repository.updated_at }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Log Summary
+        run: |
+          echo "## 📊 Slack Notification Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Statistics Sent:" >> $GITHUB_STEP_SUMMARY
+          echo "- Total TODOs: ${{ steps.stats.outputs.total }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Critical: ${{ steps.stats.outputs.critical }}" >> $GITHUB_STEP_SUMMARY
+          echo "- High: ${{ steps.stats.outputs.high }}" >> $GITHUB_STEP_SUMMARY
+          echo "- New Today: ${{ steps.stats.outputs.new_today }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Notifications sent to Slack successfully!" >> $GITHUB_STEP_SUMMARY

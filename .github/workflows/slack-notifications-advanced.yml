@@ -1,0 +1,487 @@
+name: 🔔 Advanced Slack Notifications for TODOs
+
+on:
+  workflow_run:
+    workflows: ["🎯 Create TODO Issues"]
+    types:
+      - completed
+  schedule:
+    # Daily summary at 9 AM UTC (adjust to your timezone)
+    - cron: "0 9 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      notification_type:
+        description: "Type of notification to send"
+        required: true
+        type: choice
+        options:
+          - critical_alert
+          - daily_summary
+          - weekly_report
+          - test_notification
+
+env:
+  # Slack Channel Configuration (tiered approach)
+  SLACK_CRITICAL_CHANNEL: ${{ secrets.SLACK_CRITICAL_CHANNEL || '#critical-todos' }}
+  SLACK_GENERAL_CHANNEL: ${{ secrets.SLACK_GENERAL_CHANNEL || '#dev-todos' }}
+  SLACK_REPORTS_CHANNEL: ${{ secrets.SLACK_REPORTS_CHANNEL || '#dev-reports' }}
+
+  # Color scheme for priorities
+  COLOR_CRITICAL: "#FF0000"
+  COLOR_HIGH: "#FF6B00"
+  COLOR_MEDIUM: "#FFD700"
+  COLOR_LOW: "#00AA00"
+
+jobs:
+  analyze-todos:
+    runs-on: ubuntu-latest
+    outputs:
+      critical_count: ${{ steps.analyze.outputs.critical_count }}
+      high_count: ${{ steps.analyze.outputs.high_count }}
+      total_count: ${{ steps.analyze.outputs.total_count }}
+      has_critical: ${{ steps.analyze.outputs.has_critical }}
+      summary_json: ${{ steps.analyze.outputs.summary_json }}
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🔍 Analyze TODO comments
+        id: analyze
+        run: |
+          # Create analysis directory
+          mkdir -p .github/reports
+
+          # Scan for TODOs with detailed categorization
+          echo "📊 Analyzing TODO comments..."
+
+          # Initialize counters
+          critical_count=0
+          high_count=0
+          medium_count=0
+          low_count=0
+
+          # Scan files (exclude vendor, node_modules, etc.)
+          find . -type f \( -name "*.py" -o -name "*.js" -o -name "*.ts" -o -name "*.go" -o -name "*.java" -o -name "*.rb" \) \
+            ! -path "*/node_modules/*" \
+            ! -path "*/vendor/*" \
+            ! -path "*/.venv/*" \
+            ! -path "*/venv/*" \
+            ! -path "*/__pycache__/*" \
+            ! -path "*/dist/*" \
+            ! -path "*/build/*" | while read file; do
+            
+            # Search for different TODO types
+            if grep -n "TODO\|FIXME\|HACK\|XXX\|BUG\|NOTE" "$file" > /dev/null; then
+              echo "Found TODOs in: $file" >> .github/reports/todos.txt
+              grep -n "TODO\|FIXME\|HACK\|XXX\|BUG\|NOTE" "$file" >> .github/reports/todos.txt
+            fi
+          done || true
+
+          # Count by priority (based on keyword)
+          if [ -f .github/reports/todos.txt ]; then
+            critical_count=$(grep -c "FIXME\|BUG" .github/reports/todos.txt || echo "0")
+            high_count=$(grep -c "HACK\|XXX" .github/reports/todos.txt || echo "0")
+            medium_count=$(grep -c "TODO" .github/reports/todos.txt || echo "0")
+            low_count=$(grep -c "NOTE" .github/reports/todos.txt || echo "0")
+          fi
+
+          total_count=$((critical_count + high_count + medium_count + low_count))
+          has_critical="false"
+          [ "$critical_count" -gt 0 ] && has_critical="true"
+
+          # Output results
+          echo "critical_count=$critical_count" >> $GITHUB_OUTPUT
+          echo "high_count=$high_count" >> $GITHUB_OUTPUT
+          echo "medium_count=$medium_count" >> $GITHUB_OUTPUT
+          echo "low_count=$low_count" >> $GITHUB_OUTPUT
+          echo "total_count=$total_count" >> $GITHUB_OUTPUT
+          echo "has_critical=$has_critical" >> $GITHUB_OUTPUT
+
+          # Create JSON summary for Slack
+          summary_json=$(cat <<EOF
+          {
+            "critical": $critical_count,
+            "high": $high_count,
+            "medium": $medium_count,
+            "low": $low_count,
+            "total": $total_count
+          }
+          EOF
+          )
+          echo "summary_json=$summary_json" >> $GITHUB_OUTPUT
+
+          echo "✅ Analysis complete:"
+          echo "  🔴 Critical: $critical_count"
+          echo "  🟠 High: $high_count"
+          echo "  🟡 Medium: $medium_count"
+          echo "  🟢 Low: $low_count"
+          echo "  📊 Total: $total_count"
+
+  critical-alert:
+    needs: analyze-todos
+    if: needs.analyze-todos.outputs.has_critical == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🚨 Send Critical TODO Alert to Slack
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: ${{ env.SLACK_CRITICAL_CHANNEL }}
+          payload: |
+            {
+              "text": "🚨 CRITICAL TODOs DETECTED 🚨",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🚨 Critical TODOs Require Immediate Attention",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Critical Count:*\n${{ needs.analyze-todos.outputs.critical_count }} 🔴"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*High Priority:*\n${{ needs.analyze-todos.outputs.high_count }} 🟠"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "<!channel> *Action required:* Critical issues (FIXME/BUG) have been detected in the codebase. Please review and address these items as soon as possible."
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Issues",
+                        "emoji": true
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/issues?q=is%3Aissue+is%3Aopen+label%3Apriority%3Acritical",
+                      "style": "danger"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Repository",
+                        "emoji": true
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Workflow Run",
+                        "emoji": true
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Triggered by workflow run • <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+  daily-summary:
+    needs: analyze-todos
+    if: github.event_name == 'schedule' || github.event.inputs.notification_type == 'daily_summary'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📊 Send Daily TODO Summary to Slack
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: ${{ env.SLACK_REPORTS_CHANNEL }}
+          payload: |
+            {
+              "text": "📊 Daily TODO Summary - ${{ github.repository }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "📊 Daily TODO Summary Report",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Date:*\n$(date +'%Y-%m-%d')"
+                    }
+                  ]
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*TODO Breakdown by Priority:*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "🔴 *Critical:* ${{ needs.analyze-todos.outputs.critical_count }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "🟠 *High:* ${{ needs.analyze-todos.outputs.high_count }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "🟡 *Medium:* $(echo '${{ needs.analyze-todos.outputs.summary_json }}' | grep -o '"medium":[0-9]*' | cut -d':' -f2)"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "🟢 *Low:* $(echo '${{ needs.analyze-todos.outputs.summary_json }}' | grep -o '"low":[0-9]*' | cut -d':' -f2)"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Total TODOs:* `${{ needs.analyze-todos.outputs.total_count }}`"
+                  }
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "📋 View All Issues",
+                        "emoji": true
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/issues?q=is%3Aissue+is%3Aopen+label%3Atodo"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "🔴 Critical Only",
+                        "emoji": true
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/issues?q=is%3Aissue+is%3Aopen+label%3Apriority%3Acritical",
+                      "style": "danger"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "📊 Dashboard",
+                        "emoji": true
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/blob/main/.github/TODO_DASHBOARD.md"
+                    }
+                  ]
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "🤖 Automated report • Generated at $(date +'%Y-%m-%d %H:%M:%S UTC')"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+  weekly-metrics:
+    if: github.event.inputs.notification_type == 'weekly_report'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📈 Calculate Weekly Metrics
+        id: metrics
+        run: |
+          # Get commits from the last 7 days
+          week_ago=$(date -d '7 days ago' +%Y-%m-%d)
+
+          # Count issues created this week
+          created_this_week=$(gh issue list --label todo --created ">=$week_ago" --json number | jq 'length')
+
+          # Count issues closed this week
+          closed_this_week=$(gh issue list --label todo --state closed --search "closed:>=$week_ago" --json number | jq 'length')
+
+          # Calculate resolution rate
+          if [ "$created_this_week" -gt 0 ]; then
+            resolution_rate=$((closed_this_week * 100 / created_this_week))
+          else
+            resolution_rate=0
+          fi
+
+          echo "created=$created_this_week" >> $GITHUB_OUTPUT
+          echo "closed=$closed_this_week" >> $GITHUB_OUTPUT
+          echo "resolution_rate=$resolution_rate" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📊 Send Weekly Metrics to Slack
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: ${{ env.SLACK_REPORTS_CHANNEL }}
+          payload: |
+            {
+              "text": "📈 Weekly TODO Metrics Report",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "📈 Weekly TODO Performance Metrics",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Period:*\nLast 7 days"
+                    }
+                  ]
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*This Week's Activity:*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "📝 *Created:*\n${{ steps.metrics.outputs.created }} new TODOs"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "✅ *Resolved:*\n${{ steps.metrics.outputs.closed }} TODOs"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "📊 *Resolution Rate:*\n${{ steps.metrics.outputs.resolution_rate }}%"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "🎯 *Net Change:*\n${{ steps.metrics.outputs.created - steps.metrics.outputs.closed }} TODOs"
+                    }
+                  ]
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "💡 *Tip:* Aim for a resolution rate > 100% to reduce technical debt over time"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+  test-notification:
+    if: github.event.inputs.notification_type == 'test_notification'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧪 Send Test Notification
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: ${{ env.SLACK_GENERAL_CHANNEL }}
+          payload: |
+            {
+              "text": "🧪 Test Notification",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "✅ *Slack Integration Test Successful!*\n\nYour Slack notifications are configured correctly and working as expected."
+                  }
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Repository: ${{ github.repository }} • Triggered manually"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
